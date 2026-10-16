@@ -3,7 +3,8 @@ import { getChatGPTUser, getCookie, hashToken } from "../../chatgpt-auth";
 
 export const dynamic = "force-dynamic";
 const SESSION_COOKIE = "le_session";
-const SESSION_SECONDS = 60 * 60 * 24 * 30;
+// Device identity stays on this browser until its local cookie is cleared.
+const SESSION_SECONDS = 60 * 60 * 24 * 365 * 10;
 
 async function ensureSchema() {
   const db = env.DB!;
@@ -55,15 +56,24 @@ export async function POST(request: Request) {
     await ensureSchema();
     const body = await request.json() as { action?: string; username?: string; password?: string };
 
-    if (body.action === "quick-create") {
+    if (body.action === "device-login" || body.action === "quick-create") {
+      const existingToken = getCookie(request.headers.get("cookie"), SESSION_COOKIE);
+      if (existingToken) {
+        const existing = await env.DB.prepare("SELECT user_id FROM quick_sessions WHERE token_hash=? AND expires>? LIMIT 1")
+          .bind(await hashToken(existingToken), Date.now()).first<{ user_id: string }>();
+        if (existing) {
+          await env.DB.prepare("UPDATE quick_sessions SET expires=? WHERE token_hash=?").bind(Date.now() + SESSION_SECONDS * 1000, await hashToken(existingToken)).run();
+          return Response.json({ deviceLogin: true }, { headers: { "Set-Cookie": cookie(existingToken, SESSION_SECONDS, secure) } });
+        }
+      }
       const userId = crypto.randomUUID();
-      const username = `乐友-${randomHex(6)}`;
+      const username = `本机-${randomHex(6)}`;
       const salt = randomHex(16);
-      const password = "123456";
+      const password = randomHex(32);
       await env.DB.prepare("INSERT INTO quick_accounts(id,username,salt,password_hash,created) VALUES(?,?,?,?,?)")
         .bind(userId, username, salt, await passwordHash(password, salt), Date.now()).run();
       const token = await startSession(userId);
-      return Response.json({ username, password }, { headers: { "Set-Cookie": cookie(token, SESSION_SECONDS, secure) } });
+      return Response.json({ deviceLogin: true }, { headers: { "Set-Cookie": cookie(token, SESSION_SECONDS, secure) } });
     }
 
     if (body.action === "quick-login") {
