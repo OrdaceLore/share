@@ -1,0 +1,5 @@
+import { sqliteTable, text, integer, uniqueIndex } from 'drizzle-orm/sqlite-core';
+export const songs = sqliteTable('songs', {id:text('id').primaryKey(), owner:text('owner').notNull(), title:text('title').notNull(), artist:text('artist').notNull(), url:text('url').notNull(), tags:text('tags').notNull(), note:text('note').notNull(), fingerprint:text('fingerprint').notNull(), created:integer('created').notNull()}, t=>[uniqueIndex('one_recommendation').on(t.owner,t.fingerprint)]);
+export const exchanges = sqliteTable('exchanges',{id:text('id').primaryKey(),owner:text('owner').notNull(),created:integer('created').notNull()});
+export const receipts = sqliteTable('receipts',{id:text('id').primaryKey(),owner:text('owner').notNull(),song:text('song').notNull(),exchange:text('exchange').notNull(),created:integer('created').notNull()},t=>[uniqueIndex('one_receipt').on(t.owner,t.song)]);
+export const ratings = sqliteTable('ratings',{id:text('id').primaryKey(),owner:text('owner').notNull(),song:text('song').notNull(),value:integer('value').notNull(),created:integer('created').notNull()},t=>[uniqueIndex('one_rating').on(t.owner,t.song)]);
