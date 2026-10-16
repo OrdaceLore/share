@@ -11,7 +11,9 @@ async function state(uid:string){
  const received=results[2].results.map((r:any)=>{const s=all.find(s=>s.id===r.song);return s?{...s,rating:rated.get(s.id)}:null}).filter(Boolean) as Song[];
  return {all,received,mine:all.filter(s=>s.owner===uid),balance:Number((results[3].results[0] as {balance:number}).balance),activity:results[4].results};
 }
-export async function GET(){try{const user=await getChatGPTUser();if(!user)return Response.json({all:seeds,received:[],mine:[],balance:0,activity:[],signedIn:false});if(!env.DB)throw Error('数据库尚未就绪');return Response.json({...await state(user.userId),signedIn:true});}catch{return Response.json({error:'暂时无法加载音乐，请稍后重试'},{status:503});}}
+const visibleSong=(song:Song,uid:string)=>({...song,owner:song.owner==='editorial'?'editorial':song.owner===uid?'self':'community'});
+function visibleState(data:Awaited<ReturnType<typeof state>>,uid:string){return {...data,all:data.all.map(song=>visibleSong(song,uid)),received:data.received.map(song=>visibleSong(song,uid)),mine:data.mine.map(song=>visibleSong(song,uid))};}
+export async function GET(){try{const user=await getChatGPTUser();if(!env.DB)throw Error('数据库尚未就绪');if(!user){const rows=await env.DB.prepare('SELECT id, title, artist, url, tags, note, created FROM songs ORDER BY created DESC').all();const all=[...rows.results.map((song:any)=>({...song,owner:'community',tags:JSON.parse(song.tags)})),...seeds];return Response.json({all,received:[],mine:[],balance:0,activity:[],signedIn:false});}return Response.json({...visibleState(await state(user.userId),user.userId),signedIn:true});}catch{return Response.json({error:'暂时无法加载音乐，请稍后重试'},{status:503});}}
 export async function POST(req:Request){
  try{
  const origin=req.headers.get('origin');if(origin&&origin!==new URL(req.url).origin)return Response.json({error:'请求来源无效'},{status:403});
@@ -33,12 +35,12 @@ export async function POST(req:Request){
  const selected=pickSongs(pool,s.received,Math.random,{userId:uid,songs:s.all,ratings:signals.results,mine:s.mine}),id=crypto.randomUUID();
  const result=await db.batch([db.prepare(`INSERT INTO exchanges(id,owner,created) SELECT ?,?,? WHERE (${balanceSQL})>0`).bind(id,uid,now,uid,uid,uid),...selected.map(song=>db.prepare('INSERT INTO receipts(id,owner,song,exchange,created) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM exchanges WHERE id=?)').bind(crypto.randomUUID(),uid,song.id,id,now,id))]);
  if(!result[0].meta.changes)return Response.json({error:'交换资格不足，请刷新后重试'},{status:409});
- return Response.json({...await state(uid),signedIn:true,newSongs:selected});
+ return Response.json({...visibleState(await state(uid),uid),signedIn:true,newSongs:selected.map(song=>visibleSong(song,uid))});
  }else if(b.action==='rate'){
  if(![0,1,3].includes(b.value)||typeof b.song!=='string')return Response.json({error:'评价无效'},{status:400});
  const result=await db.prepare('INSERT OR IGNORE INTO ratings(id,owner,song,value,created) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM receipts WHERE owner=? AND song=?) AND NOT EXISTS(SELECT 1 FROM songs WHERE id=? AND owner=?)').bind(crypto.randomUUID(),uid,b.song,b.value,now,uid,b.song,b.song,uid).run();
  if(!result.meta.changes)return Response.json({error:'只能评价交换获得的歌曲，且每首只能评价一次'},{status:409});
  }else return Response.json({error:'未知操作'},{status:400});
- return Response.json({...await state(uid),signedIn:true});
+ return Response.json({...visibleState(await state(uid),uid),signedIn:true});
  }catch(e){console.error('Music operation failed',e instanceof Error?e.message:'unknown');return Response.json({error:'操作未完成，请刷新后重试；重复操作不会重复发放资格'},{status:503});}
 }

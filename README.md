@@ -29,7 +29,7 @@ npm run dev
 执行迁移时将通配符替换为实际文件名，每个迁移仅执行一次。开发服务器提供仅限 loopback 的 Sites 测试登录（Seedy），匿名只能浏览；正式环境身份由 Sites 可信代理注入。不要将服务直接暴露为允许客户端伪造身份头的独立服务。
 
 ## 发布
-`.openai/hosting.json` 声明 Site ID 和 D1 DB。Sites 构建并应用 `drizzle/` 中的迁移。初始部署为私有预览；面向多人正式开放时应在 Sites 中调整访问范围。平台提供登录和访问控制，不需自行维护 OAuth 密钥。
+`.openai/hosting.json` 声明 Site ID 和 D1 DB。Sites 构建并应用 `drizzle/` 中的迁移。站点公开浏览音乐，提交、交换和评价需要登录。公开响应用 self/community 标记代替身份标识。平台提供登录和访问控制，不需自行维护 OAuth 密钥。
 
 ## 验证
 `node --import tsx --test tests/recommendation.test.mjs tests/collaborative.test.mjs` 检查推荐行为；`python3 tests/ledger_test.py` 验证资格账本、幂等及回滚。`npx tsc --noEmit` 检查类型。
