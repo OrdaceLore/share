@@ -29,7 +29,8 @@ export async function POST(req:Request){
  const s=await state(uid);const pool=eligibleSongs(s.all,s.mine,s.received,uid);
  if(s.balance<1)return Response.json({error:'交换资格不足，先推荐一首喜欢的歌吧'},{status:409});
  if(pool.length<3)return Response.json({error:'暂时不足三首新音乐，不会扣除资格。等更多人分享后再来吧'},{status:409});
- const selected=pickSongs(pool,s.received),id=crypto.randomUUID();
+ const signals=await db.prepare('SELECT owner,song,value FROM ratings ORDER BY created DESC LIMIT 20000').all<{owner:string;song:string;value:number}>();
+ const selected=pickSongs(pool,s.received,Math.random,{userId:uid,songs:s.all,ratings:signals.results,mine:s.mine}),id=crypto.randomUUID();
  const result=await db.batch([db.prepare(`INSERT INTO exchanges(id,owner,created) SELECT ?,?,? WHERE (${balanceSQL})>0`).bind(id,uid,now,uid,uid,uid),...selected.map(song=>db.prepare('INSERT INTO receipts(id,owner,song,exchange,created) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM exchanges WHERE id=?)').bind(crypto.randomUUID(),uid,song.id,id,now,id))]);
  if(!result[0].meta.changes)return Response.json({error:'交换资格不足，请刷新后重试'},{status:409});
  return Response.json({...await state(uid),signedIn:true,newSongs:selected});
