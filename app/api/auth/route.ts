@@ -26,7 +26,7 @@ function cookie(value: string, maxAge: number, secure: boolean) {
 
 function passwordHash(password: string, salt: string) {
   return crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"])
-    .then((key) => crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(salt), iterations: 120_000 }, key, 256))
+    .then((key) => crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode(salt), iterations: 100_000 }, key, 256))
     .then((bits) => Array.from(new Uint8Array(bits), (byte) => byte.toString(16).padStart(2, "0")).join(""));
 }
 
@@ -69,9 +69,10 @@ export async function POST(request: Request) {
       const userId = crypto.randomUUID();
       const username = `本机-${randomHex(6)}`;
       const salt = randomHex(16);
-      const password = randomHex(32);
+      // Device identities never use passwords; store a random, non-verifiable value.
+      const passwordHashValue = randomHex(32);
       await env.DB.prepare("INSERT INTO quick_accounts(id,username,salt,password_hash,created) VALUES(?,?,?,?,?)")
-        .bind(userId, username, salt, await passwordHash(password, salt), Date.now()).run();
+        .bind(userId, username, salt, passwordHashValue, Date.now()).run();
       const token = await startSession(userId);
       return Response.json({ deviceLogin: true }, { headers: { "Set-Cookie": cookie(token, SESSION_SECONDS, secure) } });
     }
