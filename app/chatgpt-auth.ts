@@ -1,11 +1,13 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { env } from "cloudflare:workers";
 
 export type ChatGPTUser = {
   userId: string;
   displayName: string;
   email: string;
   fullName: string | null;
+  quickAccount?: boolean;
 };
 
 const USER_ID_HEADER = "oai-authenticated-user-id";
@@ -20,6 +22,26 @@ const CALLBACK_PATH = "/callback";
 
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   const requestHeaders = await headers();
+  const quickSession = getCookie(requestHeaders.get("cookie"), "le_session");
+  if (quickSession && env.DB) {
+    try {
+      const sessionHash = await hashToken(quickSession);
+      const account = await env.DB.prepare(
+        "SELECT a.id, a.username FROM quick_sessions s JOIN quick_accounts a ON a.id = s.user_id WHERE s.token_hash = ? AND s.expires > ?",
+      ).bind(sessionHash, Date.now()).first<{ id: string; username: string }>();
+      if (account) {
+        return {
+          userId: `quick:${account.id}`,
+          displayName: account.username,
+          email: `${account.id}@quick.lehuan.local`,
+          fullName: account.username,
+          quickAccount: true,
+        };
+      }
+    } catch {
+      // Older database versions may not have the quick-account tables yet.
+    }
+  }
   const userId = requestHeaders.get(USER_ID_HEADER);
   const email = requestHeaders.get(USER_EMAIL_HEADER);
   if (!userId || !email) return null;
@@ -37,6 +59,17 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
     email,
     fullName,
   };
+}
+
+export function getCookie(cookieHeader: string | null, name: string): string | null {
+  const entry = cookieHeader?.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
+  if (!entry) return null;
+  try { return decodeURIComponent(entry.slice(name.length + 1)); } catch { return null; }
+}
+
+export async function hashToken(token: string): Promise<string> {
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 export async function requireChatGPTUser(
