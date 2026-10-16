@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { ArrowLeft, ArrowRight, AudioLines, Check, Copy, LoaderCircle, Music2 } from "lucide-react";
 
 export function LoginOptions({ returnTo }: { returnTo: string }) {
@@ -18,17 +18,6 @@ export function LoginOptions({ returnTo }: { returnTo: string }) {
       setCredentials({ username: result.username, password: result.password });
     } catch (error) { setNotice(error instanceof Error ? error.message : "暂时无法创建账号"); }
     finally { setBusy(false); }
-  }
-
-  async function quickLogin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setNotice("");
-    const form = new FormData(event.currentTarget);
-    try {
-      const response = await fetch("/api/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "quick-login", username: form.get("username"), password: form.get("password") }) });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "登录失败");
-      window.location.assign(returnTo);
-    } catch (error) { setNotice(error instanceof Error ? error.message : "登录失败"); setBusy(false); }
   }
 
   async function copyCredentials() {
@@ -54,17 +43,14 @@ export function LoginOptions({ returnTo }: { returnTo: string }) {
       </div> : <div className="login-options">
         <section className="login-option quick-option">
           <div className="login-option-icon"><Music2 size={19}/></div><div className="eyebrow muted">不需要邮箱</div>
-          <h2>快速登录</h2><p>立即生成一个随机用户名和初始密码 123456，登录后可修改用户名。</p>
-          <button className="button orange full" disabled={busy} onClick={createQuickAccount}>{busy?<LoaderCircle className="spin" size={17}/>:<ArrowRight size={17}/>}创建快速账号</button>
+          <h2>快速登录</h2><p>点击后自动生成用户名和初始密码 123456，并立即登录，无需填写资料。</p>
+          <button className="button orange full" disabled={busy} onClick={createQuickAccount}>{busy?<LoaderCircle className="spin" size={17}/>:<ArrowRight size={17}/>}快速登录并生成账号</button>
         </section>
         <section className="login-option">
           <div className="login-option-icon"><AudioLines size={19}/></div><div className="eyebrow muted">使用现有账号</div>
           <h2>账号登录</h2><p>使用当前的 ChatGPT 账号注册或登录，账号资料由 ChatGPT 安全管理。</p>
           <a className="button dark full" href={`/signin-with-chatgpt?return_to=${encodeURIComponent(returnTo)}`} target="_top">继续使用 ChatGPT <ArrowRight size={17}/></a>
         </section>
-        <form className="quick-return" onSubmit={quickLogin}>
-          <h3>已有快速账号？</h3><div className="quick-return-fields"><input name="username" autoComplete="username" required placeholder="用户名"/><input name="password" type="password" autoComplete="current-password" required placeholder="密码"/><button className="button dark" disabled={busy}>{busy?<LoaderCircle className="spin" size={16}/>:"登录"}</button></div>
-        </form>
       </div>}
       {notice&&<p className="login-error" role="alert">{notice}</p>}
       <p className="login-note">快速账号使用随机用户名区分。请妥善保存用户名和密码。</p>
